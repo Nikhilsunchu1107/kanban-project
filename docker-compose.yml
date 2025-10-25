@@ -1,0 +1,52 @@
+services:
+  # --- 1. The Backend API Service ---
+  server:
+    # Tells Docker to build the image from the 'server' folder
+    build: ./server
+    container_name: taskflow_server
+    ports:
+      # Maps port 5001 on your computer to port 5001 in the container
+      - "5001:5001"
+    environment:
+      # We load environment variables from the .env file in the server dir
+      env_file: ./server/.env
+    networks:
+      - taskflow-network
+
+  # --- 2. The Frontend Client Service ---
+  client:
+    # Tells Docker to build the image from the 'client' folder
+    build: ./client
+    container_name: taskflow_client
+    ports:
+      # Maps port 5173 on your computer to port 80 (nginx) in the container
+      - "5173:80"
+    # This ensures the client waits for the server to be healthy (optional but good)
+    depends_on:
+      - server
+    networks:
+      - taskflow-network
+      
+  # --- 3. The Database Service ---
+  mongo:
+    # Uses the official MongoDB image from Docker Hub
+    image: mongo:latest
+    container_name: taskflow_mongo
+    ports:
+      # Maps port 27017 on your computer to port 27017 in the container
+      - "27017:27017"
+    volumes:
+      # This saves your database data to a 'mongo-data' folder on your computer
+      # so it persists even if you stop the container
+      - mongo-data:/data/db
+    networks:
+      - taskflow-network
+
+# --- 4. Define the Network ---
+networks:
+  taskflow-network:
+    driver: bridge
+
+# --- 5. Define the Volume ---
+volumes:
+  mongo-data:

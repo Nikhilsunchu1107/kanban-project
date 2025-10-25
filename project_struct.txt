@@ -1,0 +1,31 @@
+/taskflow-kanban-project/
+│
+├── .git/               (Your git repository)
+├── .gitignore          (A single gitignore for the whole project)
+│
+├── client/             (Your React Frontend App)
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── Dockerfile      (Dockerfile for the client)
+│   ├── package.json
+│   └── tailwind.config.js
+│
+├── server/             (Your Node.js Backend App)
+│   ├── src/
+│   │   ├── config/     (db.js connection, environment variables)
+│   │   ├── controllers/ (authController.js, boardController.js)
+│   │   ├── middleware/ (authMiddleware.js)
+│   │   ├── models/     (userModel.js, boardModel.js, listModel.js, cardModel.js)
+│   │   ├── routes/     (authRoutes.js, boardRoutes.js)
+│   │   ├── services/   (socket.js - for your WebSocket logic)
+│   │   └── server.js   (Your main Express server file)
+│   ├── .env            (Your environment variables - VERY IMPORTANT)
+│   ├── Dockerfile      (Dockerfile for the server)
+│   └── package.json
+│
+└── docker-compose.yml  (The file that starts everything!)
