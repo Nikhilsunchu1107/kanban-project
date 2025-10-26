@@ -20,7 +20,9 @@ const httpServer = createServer(app);
 // Initialize Socket.io
 initSocket(httpServer);
 
-app.use(cors());
+app.use(cors({
+    origin: "*",
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
