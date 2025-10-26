@@ -9,7 +9,7 @@ const useAuthAxios = () => {
     // unless the user's token changes.
     const api = useMemo(() => {
         const instance = axios.create({
-            baseURL: 'http://localhost:5001/api',
+            baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api',
         });
 
         // This "interceptor" adds the auth token to every single request
