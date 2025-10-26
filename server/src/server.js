@@ -21,7 +21,7 @@ const httpServer = createServer(app);
 initSocket(httpServer);
 
 app.use(cors({
-    origin: "*",
+    origin: "https://kanban-project-lime.vercel.app/",
 }));
 app.use(express.json());
 
