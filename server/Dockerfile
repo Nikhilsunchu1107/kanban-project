@@ -28,7 +28,6 @@ COPY --from=build /app/node_modules ./node_modules
 # Copy the application code from the 'build' stage
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/src ./src
-COPY --from=build /app/.env ./
 
 # Expose the port your server runs on
 EXPOSE 5001
