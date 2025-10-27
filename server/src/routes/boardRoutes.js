@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
-  createBoard, 
+  createBoard,
+  deleteBoard,
   getBoards, 
   getBoardById,
   addBoardMember
@@ -8,9 +9,6 @@ import {
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
-
-// We apply the 'protect' middleware to all routes in this file
-// This ensures only logged-in users can create or see boards
 router.use(protect);
 
 router.route('/')
@@ -18,7 +16,8 @@ router.route('/')
   .get(getBoards);
 
 router.route('/:id')
-  .get(getBoardById);
+  .get(getBoardById)
+  .delete(deleteBoard);
 
 router.route('/:id/members')
   .post(addBoardMember);

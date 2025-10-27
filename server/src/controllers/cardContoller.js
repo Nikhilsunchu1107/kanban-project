@@ -97,3 +97,34 @@ export const moveCard = async (req, res) => {
         session.endSession();
     }
 };
+
+// @desc    Delete a card
+// @route   DELETE /api/cards/:id
+// @access  Private
+export const deleteCard = async (req, res) => {
+  try {
+    const card = await Card.findById(req.params.id);
+
+    if (!card) {
+      return res.status(404).json({ message: 'Card not found' });
+    }
+    
+    // (Optional Security: Check if user is a member of the board)
+    
+    // Get the board ID before we delete
+    const boardId = card.board.toString();
+    
+    // Delete the card
+    await card.deleteOne();
+
+    // Emit an event so everyone's UI updates
+    getIO().to(boardId).emit('BOARD_UPDATE', {
+      message: 'Card deleted',
+    });
+
+    res.status(200).json({ message: 'Card deleted' });
+  } catch (error) {
+    console.error("DELETE CARD ERROR:", error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};

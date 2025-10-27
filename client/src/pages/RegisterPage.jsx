@@ -22,8 +22,9 @@ const RegisterPage = () => {
       await register(name, email, password);
       navigate('/');
     } catch (err) {
-      setError('Failed to create account. Email might already be in use.');
-      console.error(err);
+      // Show server-provided message when available for clearer feedback
+      setError(err?.message || 'Failed to create account. Email might already be in use.');
+      console.error('Registration error:', err);
     }
   };
 

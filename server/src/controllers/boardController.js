@@ -34,6 +34,52 @@ export const createBoard = async (req, res) => {
     }
 };
 
+// @desc    Delete a board
+// @route   DELETE /api/boards/:id
+// @access  Private (Owner only)
+export const deleteBoard = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    let board;
+    await session.withTransaction(async () => {
+      const boardId = req.params.id;
+      board = await Board.findById(boardId).session(session);
+
+      if (!board) {
+        throw new Error('Board not found');
+      }
+
+      // --- Role Check: Only the owner can delete a board ---
+      if (board.owner.toString() !== req.user._id.toString()) {
+        throw new Error('Not authorized to delete this board');
+      }
+
+      // 1. Delete all cards associated with this board
+      await Card.deleteMany({ board: boardId }, { session });
+      
+      // 2. Delete all lists associated with this board
+      await List.deleteMany({ board: boardId }, { session });
+      
+      // 3. Delete the board itself
+      await board.deleteOne({ session });
+    });
+
+    // (No socket event needed, the user will be on the dashboard)
+    res.status(200).json({ message: 'Board deleted successfully' });
+  } catch (error) {
+    console.error("DELETE BOARD ERROR:", error);
+    if (error.message === 'Board not found') {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message === 'Not authorized') {
+      return res.status(401).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Server Error' });
+  } finally {
+    session.endSession();
+  }
+};
+
 // @desc    Get all boards for a user (as owner or member)
 // @route   GET /api/boards
 // @access  Private

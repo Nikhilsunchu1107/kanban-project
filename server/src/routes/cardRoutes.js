@@ -1,10 +1,8 @@
 import express from 'express';
-import { createCard, moveCard } from '../controllers/cardContoller.js';
+import { createCard, moveCard, deleteCard } from '../controllers/cardContoller.js';
 import { protect } from '../middleware/authMiddleware.js'
 
 const router = express.Router();
-
-// protect all card routes
 router.use(protect);
 
 router.route('/')
@@ -12,5 +10,8 @@ router.route('/')
 
 router.route('/:id/move')
     .put(moveCard);
+
+router.route('/:id')
+    .delete(deleteCard);
 
 export default router;

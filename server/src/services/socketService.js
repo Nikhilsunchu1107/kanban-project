@@ -5,8 +5,11 @@ let io;
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            // origin: "https://kanban-project-lime.vercel.app/",
-            origin: "*",
+            // origin: [
+            //     'https://kanban-project-lime.vercel.app', // Your production URL
+            //     'http://localhost:5173'                  // Your local dev URL
+            // ],
+            origin: '*',
             methods: ["GET", "POST"],
         },
     });
