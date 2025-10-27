@@ -11,14 +11,13 @@ const CreateCardForm = ({ listId, boardId, onCardAdded }) => {
     if (!title.trim()) return;
 
     try {
-      // Use the 'POST /api/cards' endpoint you built
       const response = await api.post('/cards', {
         title,
         listId,
         boardId,
       });
       
-      onCardAdded(response.data); // Pass the new card up to the BoardPage
+      onCardAdded(response.data); 
       setTitle('');
       setIsEditing(false);
     } catch (err) {
@@ -45,6 +44,7 @@ const CreateCardForm = ({ listId, boardId, onCardAdded }) => {
         placeholder="Enter a title for this card..."
         className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
         rows="3"
+        autoFocus
       />
       <div className="flex items-center mt-2 space-x-2">
         <button

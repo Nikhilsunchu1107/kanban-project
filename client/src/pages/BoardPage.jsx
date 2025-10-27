@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import useAuthAxios from '../hooks/useAuthAxios';
 import { useAuth } from '../context/AuthContext';
 import { DndContext, closestCorners } from '@dnd-kit/core';
-import List from '../components/List';
-import useSocket from '../hooks/useSocket' 
+import List from '../components/List'; 
+import CreateListForm from '../components/CreateListForm';
+import useSocket from '../hooks/useSocket'; 
 
 const BoardPage = () => {
   const { boardId } = useParams();
@@ -17,62 +18,50 @@ const BoardPage = () => {
   const socket = useSocket();
   const [inviteEmail, setInviteEmail] = useState('');
 
-    // CREATE A REUSABLE FETCH FUNCTION
-    // We'll use this for the initial load AND real-time updates
-    const fetchBoard = async () => {
-        try {
-            // Don't set loading to true here, to avoid flashes on update
-            setError(null);
-            const response = await api.get(`/boards/${boardId}`);
-            setBoard(response.data);
-            setLists(response.data.lists);
-        } catch (err) {
-            setError('Failed to fetch board data.');
-            console.error(err);
-        }
-    };
+  // Reusable fetch function
+  const fetchBoard = async () => {
+    try {
+      setError(null);
+      const response = await api.get(`/boards/${boardId}`);
+      setBoard(response.data);
+      setLists(response.data.lists);
+    } catch (err) {
+      setError('Failed to fetch board data.');
+      console.error(err);
+    }
+  };
 
-    useEffect(() => {
-        if (user) {
-            setLoading(true);
-            fetchBoard().finally(() => setLoading(false));
-        }
-    }, [boardId, user]); // Removed 'api' from deps, 'fetchBoard' is stable now
+  // Initial fetch
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      fetchBoard().finally(() => setLoading(false));
+    }
+  }, [boardId, user]); 
 
-    // --- 5. ADD THIS NEW useEffect FOR SOCKETS ---
-    useEffect(() => {
-        if (socket) {
-            // 1. Join the "room" for this board
-            socket.emit('join_board', boardId);
+  // Socket listener
+  useEffect(() => {
+    if (socket) {
+      socket.emit('join_board', boardId);
+      const handleBoardUpdate = (data) => {
+        console.log('Received board update:', data.message);
+        fetchBoard(); // Re-fetch on any update
+      };
+      socket.on('BOARD_UPDATE', handleBoardUpdate);
+      return () => {
+        socket.off('BOARD_UPDATE', handleBoardUpdate);
+      };
+    }
+  }, [socket, boardId]);
 
-            // 2. Listen for updates
-            const handleBoardUpdate = (data) => {
-                console.log('Received board update:', data.message);
-                // When an update happens, just re-fetch the entire board
-                // This is the simplest and most robust way to stay in sync
-                fetchBoard();
-            };
-            
-            socket.on('BOARD_UPDATE', handleBoardUpdate);
-
-            // 3. Clean up the listener when the component unmounts
-            return () => {
-                socket.off('BOARD_UPDATE', handleBoardUpdate);
-            };
-        }
-    }, [socket, boardId]);
-
-  // This is the main drag-and-drop handler
+  // Drag End Handler
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const activeCardId = active.id;
-    
-    // Store the current state for rollback
     const oldLists = JSON.parse(JSON.stringify(lists));
 
-    // Find original list and card
     let originalList;
     let draggedCard;
     for (const list of lists) {
@@ -84,7 +73,6 @@ const BoardPage = () => {
     }
     if (!draggedCard) return;
 
-    // Find destination list (from useDroppable) or card (from useSortable)
     let overList = lists.find(list => list._id === over.id);
     let overCard = null;
     if (!overList) {
@@ -96,20 +84,18 @@ const BoardPage = () => {
         }
       }
     }
-    if (!overList) return; // Invalid drop
+    if (!overList) return; 
 
     const newListId = overList._id;
     let newPosition;
 
     if (overCard) {
-      // Dropped on a card
       newPosition = overList.cards.findIndex(card => card._id === overCard._id);
     } else {
-      // Dropped on a list (useDroppable area)
       newPosition = overList.cards.length;
     }
 
-    // --- Optimistic Update ---
+    // Optimistic Update 
     let newLists = JSON.parse(JSON.stringify(lists));
     const originalListIndex = newLists.findIndex(l => l._id === originalList._id);
     const [removedCard] = newLists[originalListIndex].cards.splice(
@@ -120,25 +106,25 @@ const BoardPage = () => {
     newLists[newListIndex].cards.splice(newPosition, 0, removedCard);
     setLists(newLists);
 
-    // --- API Call & Refetch ---
+    // API Call
     try {
       await api.put(`/cards/${activeCardId}/move`, {
         listId: newListId,
         position: newPosition,
       });
+      // Backend emits socket event, no need to re-fetch here
     } catch (err) {
       console.error('Failed to move card:', err);
-      setLists(oldLists); // Rollback on failure
+      setLists(oldLists); // Rollback
       setError('Failed to move card. Reverting changes.');
     }
   };
 
+  // Add Card Handler
   const handleCardAdded = (newCard) => {
-    // Find the list the card belongs to and add it
     setLists(prevLists => {
       return prevLists.map(list => {
         if (list._id === newCard.list) {
-          // Return a new list object with the new card added
           return { ...list, cards: [...list.cards, newCard] };
         }
         return list;
@@ -146,35 +132,65 @@ const BoardPage = () => {
     });
   };
 
-    const handleInvite = async (e) => {
-        e.preventDefault();
-        if (!inviteEmail.trim()) return;
-
-        try {
-            // Call our new endpoint
-            const response = await api.post(`/boards/${boardId}/members`, { email: inviteEmail });
-            
-            // Update the board state with the new member data
-            // The API returns the full board with populated members
-            setBoard(response.data);
-            setInviteEmail(''); // Clear the form
-
-        } catch (err) {
-            console.error('Failed to add member:', err);
-            setError(err.response?.data?.message || 'Failed to add member');
-        }
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading board...</div>;
-    if (error) return <div className="p-8 text-red-500">{error}</div>;
-    if (!board) return <div className="p-8">Board not found.</div>;
-
-    console.log("OWNER CHECK:", 
-        "Board Owner:", board.owner, 
-        "Logged-in User:", user
+  // Delete Card Handler
+  const handleDeleteCard = async (cardIdToDelete) => {
+    const oldLists = JSON.parse(JSON.stringify(lists)); 
+    setLists(prevLists => 
+      prevLists.map(list => ({
+        ...list,
+        cards: list.cards.filter(card => card._id !== cardIdToDelete)
+      }))
     );
+    try {
+      await api.delete(`/cards/${cardIdToDelete}`);
+      // Backend emits socket event
+    } catch (err) {
+      console.error("Failed to delete card:", err);
+      setError('Failed to delete card. Reverting.');
+      setLists(oldLists);
+    }
+  };
 
-    const isOwner = board && user && board.owner._id === user.id;
+  // Add List Handler
+  const handleListAdded = (newList) => {
+    // Add an empty cards array for immediate rendering
+    setLists(prevLists => [...prevLists, { ...newList, cards: [] }]);
+  };
+
+  // Delete List Handler
+  const handleDeleteList = async (listIdToDelete) => {
+    const oldLists = JSON.parse(JSON.stringify(lists));
+    setLists(prevLists => prevLists.filter(list => list._id !== listIdToDelete));
+    try {
+      await api.delete(`/lists/${listIdToDelete}`);
+       // Backend emits socket event
+    } catch (err) {
+      console.error("Failed to delete list:", err);
+      setError('Failed to delete list. Reverting.');
+      setLists(oldLists); 
+    }
+  };
+
+  // Invite Handler
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    try {
+      const response = await api.post(`/boards/${boardId}/members`, { email: inviteEmail });
+      setBoard(response.data); // Update board state with populated members
+      setInviteEmail('');
+      // Backend emits socket event
+    } catch (err) {
+      console.error('Failed to add member:', err);
+      setError(err.response?.data?.message || 'Failed to add member');
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading board...</div>;
+  if (error) return <div className="p-8 text-red-500">{error}</div>;
+  if (!board) return <div className="p-8">Board not found.</div>;
+  
+  const isOwner = board && user && board.owner._id === user.id;
 
   return (
     <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCorners}>
@@ -185,7 +201,7 @@ const BoardPage = () => {
             &larr; Back to Dashboard
           </Link>
           <h1 className="text-2xl font-bold text-gray-800">{board.name}</h1>
-
+          
           {isOwner && (
             <form onSubmit={handleInvite} className="flex space-x-2">
               <input
@@ -202,7 +218,7 @@ const BoardPage = () => {
                 Invite
               </button>
             </form>
-          )}  
+          )}
 
           <div className="text-gray-700">Owner: {board.owner?.name || '...'}</div>
         </nav>
@@ -210,14 +226,20 @@ const BoardPage = () => {
         {/* Lists Container */}
         <div className="flex-grow p-4 overflow-x-auto bg-gray-100">
           <div className="flex h-full space-x-4">
-              {lists.map((list) => (
-                <List 
-                  key={list._id} 
-                  list={list}
-                  boardId={board._id} 
-                  onCardAdded={handleCardAdded} 
-                />
-              ))}
+            {lists.map((list) => (
+              <List 
+                key={list._id} 
+                list={list}
+                boardId={board._id} 
+                onCardAdded={handleCardAdded} 
+                onDeleteCard={handleDeleteCard}
+                onDeleteList={handleDeleteList}
+              />
+            ))}
+            <CreateListForm 
+              boardId={board._id} 
+              onListAdded={handleListAdded} 
+            />
           </div>
         </div>
       </div>

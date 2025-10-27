@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Board from "../models/boardModel.js";
 import Card from "../models/cardModel.js";
 import List from "../models/listModel.js";
