@@ -128,3 +128,42 @@ export const deleteCard = async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 };
+
+// @desc    Update a card's details (title, description)
+// @route   PUT /api/cards/:id
+// @access  Private
+export const updateCard = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const cardId = req.params.id;
+
+    const card = await Card.findById(cardId);
+
+    if (!card) {
+      return res.status(404).json({ message: 'Card not found' });
+    }
+
+    // (Optional Security: Check if user is a member of the board)
+
+    // Update fields if they were provided in the request body
+    if (title !== undefined) {
+      card.title = title;
+    }
+    if (description !== undefined) {
+      card.description = description;
+    }
+
+    const updatedCard = await card.save();
+
+    // Emit an event so everyone's UI updates
+    getIO().to(updatedCard.board.toString()).emit('BOARD_UPDATE', {
+      message: 'Card updated',
+      card: updatedCard, // Send the updated card data
+    });
+
+    res.status(200).json(updatedCard);
+  } catch (error) {
+    console.error("UPDATE CARD ERROR:", error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};

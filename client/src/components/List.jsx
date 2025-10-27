@@ -4,7 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import Card from './Card';
 import CreateCardForm from './CreateCardForm';
 
-const List = ({ list, boardId, onCardAdded, onDeleteCard, onDeleteList }) => { 
+const List = ({ list, boardId, onCardAdded, onDeleteCard, onDeleteList, onCardClick }) => {
   const cardIds = list.cards.map(card => card._id);
 
   const { setNodeRef } = useDroppable({ id: list._id });
@@ -16,7 +16,7 @@ const List = ({ list, boardId, onCardAdded, onDeleteCard, onDeleteList }) => {
   };
 
   return (
-    <div 
+    <div
       className="flex flex-col flex-shrink-0 w-72 bg-gray-200 rounded-lg shadow-md max-h-full"
     >
       {/* List Header */}
@@ -24,7 +24,7 @@ const List = ({ list, boardId, onCardAdded, onDeleteCard, onDeleteList }) => {
         <h3 className="text-lg font-semibold text-gray-700">
           {list.name}
         </h3>
-        <button 
+        <button
           onClick={handleDelete}
           className="p-1 text-xs text-gray-500 rounded hover:bg-gray-400 hover:text-red-600"
           aria-label="Delete list"
@@ -32,26 +32,27 @@ const List = ({ list, boardId, onCardAdded, onDeleteCard, onDeleteList }) => {
           ✕
         </button>
       </div>
-      
+
       {/* Cards Container */}
-      <div 
+      <div
         ref={setNodeRef}
         className="p-3 space-y-3 overflow-y-auto min-h-[100px]"
       >
         <SortableContext items={cardIds}>
           {list.cards.map((card) => (
-            <Card 
-              key={card._id} 
-              card={card} 
+            <Card
+              key={card._id}
+              card={card}
               onDelete={onDeleteCard}
+              onClick={() => onCardClick(card)} // Pass the click handler up
             />
           ))}
         </SortableContext>
-            
-        <CreateCardForm 
-          listId={list._id} 
-          boardId={boardId} 
-          onCardAdded={onCardAdded} 
+
+        <CreateCardForm
+          listId={list._id}
+          boardId={boardId}
+          onCardAdded={onCardAdded}
         />
       </div>
     </div>
