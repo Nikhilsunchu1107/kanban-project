@@ -5,7 +5,8 @@ let io;
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: "https://kanban-project-lime.vercel.app/",
+            // origin: "https://kanban-project-lime.vercel.app/",
+            origin: "*",
             methods: ["GET", "POST"],
         },
     });
