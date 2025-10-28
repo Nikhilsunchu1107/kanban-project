@@ -20,7 +20,7 @@ export const createBoard = async (req, res) => {
         });
 
         // When a new board is created, we also create default lists
-        const defaultLists = ['To Do', 'In Progress', 'Done'];
+        const defaultLists = ['To Do', 'Development', 'Testing', 'Review', 'Deployment', 'Done'];
         for (let i = 0; i < defaultLists.length; i++) {
             await List.create({
                 name:defaultLists[i],

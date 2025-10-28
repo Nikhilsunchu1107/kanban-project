@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const listSchema = new mongoose.Schema({
   name: {
@@ -8,12 +8,18 @@ const listSchema = new mongoose.Schema({
   board: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: 'Board', // Links the list to a Board
+    ref: 'Board',
   },
   position: {
-    type: Number, // We will use this for ordering
+    type: Number,
     required: true,
   },
+  // --- ADD THIS FIELD ---
+  wipLimit: {
+    type: Number,
+    default: null, // Default to no limit
+  },
+  // ----------------------
 }, { timestamps: true });
 
 const List = mongoose.model('List', listSchema);

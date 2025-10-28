@@ -25,7 +25,7 @@ const BoardPage = () => {
   // Reusable fetch function
   const fetchBoard = async () => {
     try {
-      // setError(null); // Don't clear error on auto-refetch
+      // setError(null); // Avoid clearing error on automatic refetch from socket
       const response = await api.get(`/boards/${boardId}`);
       setBoard(response.data);
       setLists(response.data.lists);
@@ -104,20 +104,10 @@ const BoardPage = () => {
     // --- Optimistic Update ---
     let newLists = JSON.parse(JSON.stringify(lists)); // Deep copy for manipulation
     const originalListIndex = newLists.findIndex(l => l._id === originalList._id);
-
-    // Find the index of the dragged card in its original list
     const originalCardIndex = newLists[originalListIndex].cards.findIndex(c => c._id === activeCardId);
-
-    // Remove the card from the original list
     const [removedCard] = newLists[originalListIndex].cards.splice(originalCardIndex, 1);
-
-    // Find the index of the destination list
     const newListIndex = newLists.findIndex(l => l._id === newListId);
-
-    // Insert the card into the new list at the calculated position
     newLists[newListIndex].cards.splice(newPosition, 0, removedCard);
-
-    // Update the state immediately
     setLists(newLists);
 
     // --- API Call ---
@@ -140,7 +130,6 @@ const BoardPage = () => {
     setLists(prevLists => {
       return prevLists.map(list => {
         if (list._id === newCard.list) {
-          // Add the new card to the correct list
           return { ...list, cards: [...list.cards, newCard] };
         }
         return list;
@@ -151,7 +140,6 @@ const BoardPage = () => {
   // Delete Card Handler
   const handleDeleteCard = async (cardIdToDelete) => {
     const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
-    // Optimistic update: Remove card from UI immediately
     setLists(prevLists =>
       prevLists.map(list => ({
         ...list,
@@ -170,14 +158,13 @@ const BoardPage = () => {
 
   // Add List Handler
   const handleListAdded = (newList) => {
-    // Add an empty cards array for immediate rendering
-    setLists(prevLists => [...prevLists, { ...newList, cards: [] }]);
+    // Add an empty cards array and potentially default wipLimit for immediate rendering
+    setLists(prevLists => [...prevLists, { ...newList, cards: [], wipLimit: newList.wipLimit || null }]);
   };
 
   // Delete List Handler
   const handleDeleteList = async (listIdToDelete) => {
     const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
-    // Optimistic update
     setLists(prevLists => prevLists.filter(list => list._id !== listIdToDelete));
     try {
       await api.delete(`/lists/${listIdToDelete}`);
@@ -185,6 +172,23 @@ const BoardPage = () => {
     } catch (err) {
       console.error("Failed to delete list:", err);
       setError('Failed to delete list. Reverting.');
+      setLists(oldLists); // Rollback
+    }
+  };
+
+  // Update List WIP Limit Handler
+  const handleUpdateWipLimit = async (listId, newLimit) => {
+    const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
+    // Optimistic Update
+    setLists(prevLists => prevLists.map(list =>
+      list._id === listId ? { ...list, wipLimit: newLimit } : list
+    ));
+    try {
+      await api.put(`/lists/${listId}/wip`, { wipLimit: newLimit });
+      // Backend emits socket event
+    } catch (err) {
+      console.error("Failed to update WIP limit:", err);
+      setError('Failed to update WIP limit. Reverting.');
       setLists(oldLists); // Rollback
     }
   };
@@ -208,7 +212,7 @@ const BoardPage = () => {
   // Update Card Handler (for Modal)
   const handleUpdateCard = async (cardId, updatedData) => {
     const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
-    // Optimistic Update (Update UI instantly)
+    // Optimistic Update
     setLists(prevLists =>
       prevLists.map(list => ({
         ...list,
@@ -220,9 +224,8 @@ const BoardPage = () => {
     handleCloseModal(); // Close modal immediately
 
     try {
-      // Call the PUT /api/cards/:id endpoint
       await api.put(`/cards/${cardId}`, updatedData);
-      // Backend will emit socket event for other users
+      // Backend emits socket event
     } catch (err) {
       console.error("Failed to update card:", err);
       setError('Failed to update card. Reverting.');
@@ -243,8 +246,7 @@ const BoardPage = () => {
 
   // Render Guards
   if (loading) return <div className="p-8 text-center">Loading board...</div>;
-  // Don't show board-level error if a modal-related error occurs, or if modal is open
-  if (error && !isModalOpen) return <div className="p-8 text-red-500">{error}</div>;
+  if (error && !isModalOpen) return <div className="p-8 text-red-500">{error}</div>; // Don't show board error if modal error occurs
   if (!board) return <div className="p-8">Board not found.</div>;
 
   const isOwner = board && user && board.owner._id === user.id;
@@ -257,7 +259,7 @@ const BoardPage = () => {
           <Link to="/" className="text-xl font-bold text-blue-600">
             &larr; Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800 text-center order-first w-full sm:order-none sm:w-auto"> {/* Centered title, adjusted order for small screens */}
+          <h1 className="text-2xl font-bold text-gray-800 text-center order-first w-full sm:order-none sm:w-auto"> {/* Centered title, adjusted order */}
             {board.name}
           </h1>
 
@@ -297,6 +299,7 @@ const BoardPage = () => {
                 onDeleteCard={handleDeleteCard}
                 onDeleteList={handleDeleteList}
                 onCardClick={handleCardClick} // Pass click handler
+                onUpdateWipLimit={handleUpdateWipLimit} // Pass WIP update handler
               />
             ))}
             <CreateListForm

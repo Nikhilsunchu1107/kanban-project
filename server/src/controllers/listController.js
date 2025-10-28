@@ -70,3 +70,39 @@ export const deleteList = async (req, res) => {
     session.endSession();
   }
 };
+
+// @desc    Update WIP Limit for a list
+// @route   PUT /api/lists/:id/wip
+// @access  Private
+export const updateListWipLimit = async (req, res) => {
+  try {
+    const { wipLimit } = req.body; // Expecting { wipLimit: 5 } or { wipLimit: null }
+    const listId = req.params.id;
+
+    const list = await List.findById(listId);
+    if (!list) {
+      return res.status(404).json({ message: 'List not found' });
+    }
+
+    // (Optional: Check user permissions)
+
+    // Validate the input (must be a positive number or null)
+    const limitValue = wipLimit === null || wipLimit === '' ? null : parseInt(wipLimit, 10);
+    if (limitValue !== null && (isNaN(limitValue) || limitValue < 1)) {
+        return res.status(400).json({ message: 'WIP limit must be a positive number or null.' });
+    }
+
+    list.wipLimit = limitValue;
+    await list.save();
+
+    // Emit event so UIs update
+    getIO().to(list.board.toString()).emit('BOARD_UPDATE', {
+      message: 'List WIP limit updated',
+    });
+
+    res.status(200).json(list);
+  } catch (error) {
+    console.error("UPDATE WIP LIMIT ERROR:", error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
