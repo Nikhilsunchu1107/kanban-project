@@ -9,30 +9,51 @@ import { getIO } from '../services/socketService.js';
 // @route   POST /api/boards
 // @access  Private
 export const createBoard = async (req, res) => {
-    try {
-        const { name } = req.body;
-        
-        // The 'owner' is the logged-in user, which we get from the 'protect' middlewar
-        const board = await Board.create({
-            name,
-            owner: req.user._id,
-            members: [req.user._id], // The owner is also a member
-        });
+  try {
+    // Get name AND optional emails array from request body
+    const { name, emails } = req.body;
+    const ownerId = req.user._id;
 
-        // When a new board is created, we also create default lists
-        const defaultLists = ['To Do', 'Development', 'Testing', 'Review', 'Deployment', 'Done'];
-        for (let i = 0; i < defaultLists.length; i++) {
-            await List.create({
-                name:defaultLists[i],
-                board: board._id,
-                position: i,
-            });
+    // Start with the owner as the only member
+    const memberIds = [ownerId];
+
+    // If emails were provided, find valid users and add their IDs
+    if (emails && Array.isArray(emails) && emails.length > 0) {
+      const usersToInvite = await User.find({ email: { $in: emails } }).select('_id');
+      usersToInvite.forEach(user => {
+        // Add user only if they exist and are not the owner already
+        if (user && !memberIds.some(id => id.equals(user._id))) {
+          memberIds.push(user._id);
         }
-
-        res.status(201).json(board);
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error', error: error.message });
+      });
     }
+
+    const board = await Board.create({
+      name,
+      owner: ownerId,
+      members: memberIds, // Use the potentially expanded member list
+    });
+
+    // Create default lists (no change here)
+    const defaultLists = ['To Do', 'Development', 'Testing', 'Review', 'Deployment', 'Done'];
+    for (let i = 0; i < defaultLists.length; i++) {
+      await List.create({
+        name: defaultLists[i],
+        board: board._id,
+        position: i,
+      });
+    }
+
+    // Populate owner and members before sending back
+    const populatedBoard = await Board.findById(board._id)
+      .populate('owner', 'name email')
+      .populate('members', 'name email');
+
+    res.status(201).json(populatedBoard); // Send back the populated board
+  } catch (error) {
+    console.error("CREATE BOARD ERROR:", error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
 };
 
 // @desc    Delete a board
@@ -119,7 +140,7 @@ export const getBoardById = async (req, res) => {
         const lists = await List.find({ board: board._id }).sort({ position: 1 });
 
         // find all cards for this board
-        const cards = await Card.find({ board: board._id })
+        const cards = await Card.find({ board: board._id }).populate('assignedTo', 'name email');
 
         // structure the data to be easy for the frontend:
         // we'll return the lists, and attach the cards to each list

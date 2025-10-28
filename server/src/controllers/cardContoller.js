@@ -129,12 +129,13 @@ export const deleteCard = async (req, res) => {
   }
 };
 
-// @desc    Update a card's details (title, description)
+// @desc    Update a card's details
 // @route   PUT /api/cards/:id
 // @access  Private
 export const updateCard = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    // Destructure all possible fields from the body
+    const { title, description, dueDate, priority, assignedTo, tag } = req.body;
     const cardId = req.params.id;
 
     const card = await Card.findById(cardId);
@@ -146,14 +147,21 @@ export const updateCard = async (req, res) => {
     // (Optional Security: Check if user is a member of the board)
 
     // Update fields if they were provided in the request body
-    if (title !== undefined) {
-      card.title = title;
-    }
-    if (description !== undefined) {
-      card.description = description;
+    if (title !== undefined) card.title = title;
+    if (description !== undefined) card.description = description;
+
+    // Handle date (null or valid date string)
+    if (dueDate !== undefined) {
+       card.dueDate = dueDate ? new Date(dueDate) : null;
     }
 
-    const updatedCard = await card.save();
+    // Handle priority, assignee, tag (null or valid value)
+    if (priority !== undefined) card.priority = priority; // Validation handled by schema enum
+    if (assignedTo !== undefined) card.assignedTo = assignedTo === 'unassigned' ? null : assignedTo;
+    if (tag !== undefined) card.tag = tag === 'none' ? null : tag;
+
+    // Use populate to return the assignee's details
+    const updatedCard = await (await card.save()).populate('assignedTo', 'name email');
 
     // Emit an event so everyone's UI updates
     getIO().to(updatedCard.board.toString()).emit('BOARD_UPDATE', {
@@ -164,6 +172,10 @@ export const updateCard = async (req, res) => {
     res.status(200).json(updatedCard);
   } catch (error) {
     console.error("UPDATE CARD ERROR:", error);
+    // Handle potential validation errors from schema enums
+    if (error.name === 'ValidationError') {
+        return res.status(400).json({ message: 'Invalid data provided', details: error.message });
+    }
     res.status(500).json({ message: 'Server Error' });
   }
 };

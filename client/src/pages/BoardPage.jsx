@@ -8,6 +8,7 @@ import CreateListForm from '../components/CreateListForm';
 import useSocket from '../hooks/useSocket';
 import Modal from '../components/Modal'; // Import Modal
 import CardEditForm from '../components/CardEditForm'; // Import Edit Form
+import CardSummaryModal from '../components/CardSummaryModal';
 
 const BoardPage = () => {
   const { boardId } = useParams();
@@ -18,14 +19,14 @@ const BoardPage = () => {
   const api = useAuthAxios();
   const [lists, setLists] = useState([]);
   const socket = useSocket();
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false); // Modal state
-  const [selectedCard, setSelectedCard] = useState(null); // Selected card state
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // Reusable fetch function
   const fetchBoard = async () => {
     try {
-      // setError(null); // Avoid clearing error on automatic refetch from socket
+      // setError(null); // Keep previous errors unless explicitly cleared
       const response = await api.get(`/boards/${boardId}`);
       setBoard(response.data);
       setLists(response.data.lists);
@@ -41,7 +42,7 @@ const BoardPage = () => {
       setLoading(true);
       fetchBoard().finally(() => setLoading(false));
     }
-  }, [boardId, user]); // Dependency array includes user and boardId
+  }, [boardId, user]);
 
   // Socket listener
   useEffect(() => {
@@ -56,7 +57,7 @@ const BoardPage = () => {
         socket.off('BOARD_UPDATE', handleBoardUpdate);
       };
     }
-  }, [socket, boardId]); // Dependency array includes socket and boardId
+  }, [socket, boardId]);
 
   // Drag End Handler
   const handleDragEnd = async (event) => {
@@ -64,9 +65,8 @@ const BoardPage = () => {
     if (!over || active.id === over.id) return;
 
     const activeCardId = active.id;
-    const oldLists = JSON.parse(JSON.stringify(lists)); // Deep copy for rollback
+    const oldLists = JSON.parse(JSON.stringify(lists));
 
-    // Find original list and card
     let originalList;
     let draggedCard;
     for (const list of lists) {
@@ -76,12 +76,11 @@ const BoardPage = () => {
         break;
       }
     }
-    if (!draggedCard || !originalList) return; // Card not found or somehow list is missing
+    if (!draggedCard || !originalList) return;
 
-    // Find destination list and card/list index
     let overList = lists.find(list => list._id === over.id);
     let overCard = null;
-    if (!overList) { // If not dropped directly on a list, find which list the target card is in
+    if (!overList) {
       for (const list of lists) {
         overCard = list.cards.find(card => card._id === over.id);
         if (overCard) {
@@ -90,19 +89,19 @@ const BoardPage = () => {
         }
       }
     }
-    if (!overList) return; // Invalid drop target
+    if (!overList) return;
 
     const newListId = overList._id;
     let newPosition;
 
-    if (overCard) { // Dropped onto another card
+    if (overCard) {
       newPosition = overList.cards.findIndex(card => card._id === overCard._id);
-    } else { // Dropped onto a list column itself
+    } else {
       newPosition = overList.cards.length;
     }
 
-    // --- Optimistic Update ---
-    let newLists = JSON.parse(JSON.stringify(lists)); // Deep copy for manipulation
+    // Optimistic Update
+    let newLists = JSON.parse(JSON.stringify(lists));
     const originalListIndex = newLists.findIndex(l => l._id === originalList._id);
     const originalCardIndex = newLists[originalListIndex].cards.findIndex(c => c._id === activeCardId);
     const [removedCard] = newLists[originalListIndex].cards.splice(originalCardIndex, 1);
@@ -110,16 +109,16 @@ const BoardPage = () => {
     newLists[newListIndex].cards.splice(newPosition, 0, removedCard);
     setLists(newLists);
 
-    // --- API Call ---
+    // API Call
     try {
       await api.put(`/cards/${activeCardId}/move`, {
         listId: newListId,
         position: newPosition,
       });
-      // Backend emits socket event, confirmation/refetch handled by socket listener
+      // Backend emits socket event
     } catch (err) {
       console.error('Failed to move card:', err);
-      setLists(oldLists); // Rollback optimistic update on error
+      setLists(oldLists); // Rollback
       setError('Failed to move card. Reverting changes.');
     }
   };
@@ -139,7 +138,7 @@ const BoardPage = () => {
 
   // Delete Card Handler
   const handleDeleteCard = async (cardIdToDelete) => {
-    const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
+    const oldLists = JSON.parse(JSON.stringify(lists));
     setLists(prevLists =>
       prevLists.map(list => ({
         ...list,
@@ -152,19 +151,18 @@ const BoardPage = () => {
     } catch (err) {
       console.error("Failed to delete card:", err);
       setError('Failed to delete card. Reverting.');
-      setLists(oldLists); // Rollback on error
+      setLists(oldLists);
     }
   };
 
   // Add List Handler
   const handleListAdded = (newList) => {
-    // Add an empty cards array and potentially default wipLimit for immediate rendering
     setLists(prevLists => [...prevLists, { ...newList, cards: [], wipLimit: newList.wipLimit || null }]);
   };
 
   // Delete List Handler
   const handleDeleteList = async (listIdToDelete) => {
-    const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
+    const oldLists = JSON.parse(JSON.stringify(lists));
     setLists(prevLists => prevLists.filter(list => list._id !== listIdToDelete));
     try {
       await api.delete(`/lists/${listIdToDelete}`);
@@ -172,14 +170,13 @@ const BoardPage = () => {
     } catch (err) {
       console.error("Failed to delete list:", err);
       setError('Failed to delete list. Reverting.');
-      setLists(oldLists); // Rollback
+      setLists(oldLists);
     }
   };
 
   // Update List WIP Limit Handler
   const handleUpdateWipLimit = async (listId, newLimit) => {
-    const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
-    // Optimistic Update
+    const oldLists = JSON.parse(JSON.stringify(lists));
     setLists(prevLists => prevLists.map(list =>
       list._id === listId ? { ...list, wipLimit: newLimit } : list
     ));
@@ -193,12 +190,13 @@ const BoardPage = () => {
     }
   };
 
-  // Invite Handler
+  // Invite Handler (for the form on this page)
   const handleInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
     try {
       setError(null); // Clear previous errors
+      // Use the dedicated endpoint for adding members
       const response = await api.post(`/boards/${boardId}/members`, { email: inviteEmail });
       setBoard(response.data); // Update board state with populated members
       setInviteEmail('');
@@ -211,8 +209,7 @@ const BoardPage = () => {
 
   // Update Card Handler (for Modal)
   const handleUpdateCard = async (cardId, updatedData) => {
-    const oldLists = JSON.parse(JSON.stringify(lists)); // For rollback
-    // Optimistic Update
+    const oldLists = JSON.parse(JSON.stringify(lists));
     setLists(prevLists =>
       prevLists.map(list => ({
         ...list,
@@ -221,7 +218,7 @@ const BoardPage = () => {
         )
       }))
     );
-    handleCloseModal(); // Close modal immediately
+    handleCloseCardModal();
 
     try {
       await api.put(`/cards/${cardId}`, updatedData);
@@ -229,41 +226,66 @@ const BoardPage = () => {
     } catch (err) {
       console.error("Failed to update card:", err);
       setError('Failed to update card. Reverting.');
-      setLists(oldLists); // Rollback on error
+      setLists(oldLists);
     }
   };
 
   // Modal Handlers
   const handleCardClick = (card) => {
     setSelectedCard(card);
-    setIsModalOpen(true);
+    setIsCardModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const handleCloseCardModal = () => {
+    setIsCardModalOpen(false);
     setSelectedCard(null);
+  };
+
+  // --- 3. Add Handlers for Summary Modal ---
+  const handleOpenSummaryModal = () => {
+    setIsSummaryModalOpen(true);
+  };
+
+  const handleCloseSummaryModal = () => {
+    setIsSummaryModalOpen(false);
+  };
+
+  // This function is called when a card is clicked in the summary table
+  const handleSelectCardFromSummary = (card) => {
+    // We already have the card data, just open the edit modal
+    setSelectedCard(card);
+    setIsCardModalOpen(true);
+    // handleCloseSummaryModal() is called by the summary modal itself
   };
 
   // Render Guards
   if (loading) return <div className="p-8 text-center">Loading board...</div>;
-  if (error && !isModalOpen) return <div className="p-8 text-red-500">{error}</div>; // Don't show board error if modal error occurs
+  if (error && !isCardModalOpen) return <div className="p-8 text-red-500">{error}</div>;
   if (!board) return <div className="p-8">Board not found.</div>;
 
+  // Check if the current user owns the board AFTER board is loaded
   const isOwner = board && user && board.owner._id === user.id;
 
   return (
     <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCorners}>
       <div className="flex flex-col h-screen">
         {/* Board Header */}
-        <nav className="flex items-center justify-between p-4 bg-white shadow-md flex-wrap gap-2"> {/* Added flex-wrap and gap */}
+        <nav className="flex items-center justify-between p-4 bg-white shadow-md flex-wrap gap-2">
           <Link to="/" className="text-xl font-bold text-blue-600">
             &larr; Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800 text-center order-first w-full sm:order-none sm:w-auto"> {/* Centered title, adjusted order */}
+          <h1 className="text-2xl font-bold text-gray-800 text-center order-first w-full sm:order-none sm:w-auto">
             {board.name}
           </h1>
 
-          <div className="flex items-center space-x-4"> {/* Container for invite and owner */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleOpenSummaryModal}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+            >
+              View Summary
+            </button>
+            {/* Invite Form - Conditionally rendered */}
             {isOwner && (
               <form onSubmit={handleInvite} className="flex space-x-2">
                 <input
@@ -271,17 +293,17 @@ const BoardPage = () => {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="Invite user by email..."
-                  className="px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm" // Smaller text
+                  className="px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
                 />
                 <button
                   type="submit"
-                  className="px-3 py-1 text-white bg-blue-600 rounded-md text-sm" // Smaller text
+                  className="px-3 py-1 text-white bg-blue-600 rounded-md text-sm"
                 >
                   Invite
                 </button>
               </form>
             )}
-            <div className="text-gray-700 text-sm whitespace-nowrap"> {/* Prevent wrapping */}
+            <div className="text-gray-700 text-sm whitespace-nowrap">
               Owner: {board.owner?.name || '...'}
             </div>
           </div>
@@ -310,15 +332,24 @@ const BoardPage = () => {
         </div>
 
         {/* Card Details Modal */}
-        <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
+        <Modal isOpen={isCardModalOpen} onClose={handleCloseCardModal}>
           {selectedCard && (
             <CardEditForm
               card={selectedCard}
+              boardMembers={board.members}
               onSave={handleUpdateCard}
-              onCancel={handleCloseModal}
+              onCancel={handleCloseCardModal}
             />
           )}
         </Modal>
+
+        {/* --- Add Card Summary Modal --- */}
+        <CardSummaryModal
+          isOpen={isSummaryModalOpen}
+          onClose={handleCloseSummaryModal}
+          lists={lists} // Pass the lists data
+          onCardSelect={handleSelectCardFromSummary} // Pass the callback
+        />
 
       </div>
     </DndContext>
